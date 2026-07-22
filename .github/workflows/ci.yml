@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  kernel:
+    name: Kernel (Rust)
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: kernel
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-dev libduckdb-dev protobuf-compiler
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+      - name: Install system deps (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc python3
+      - name: Check
+        run: cargo check --manifest-path kernel/Cargo.toml --all-features
+      - name: Test
+        run: cargo test --manifest-path kernel/Cargo.toml --all-features
+      - name: Generate coverage
+        run: |
+          cargo install cargo-tarpaulin --locked
+          cargo tarpaulin --manifest-path kernel/Cargo.toml --all-features --out Xml
+        continue-on-error: true
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: cobertura.xml
+        continue-on-error: true
+      - name: Build
+        run: cargo build --manifest-path kernel/Cargo.toml --release
+      - name: Clippy
+        run: cargo clippy --manifest-path kernel/Cargo.toml --all-features -- -D warnings
+      - name: Format check
+        run: cargo fmt --manifest-path kernel/Cargo.toml --check
+
+  server:
+    name: Server (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Check
+        run: go vet ./...
+        working-directory: server
+      - name: Go fmt check
+        run: 'go fmt ./... 2>&1 | (read line && echo "unformatted: $line" && exit 1 || exit 0)'
+        working-directory: server
+      - name: Build
+        run: go build ./...
+        working-directory: server
+
+  frontend:
+    name: Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: frontend
+      - name: Type check
+        run: npx tsc --noEmit
+        working-directory: frontend
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+      - name: ESLint
+        run: npx eslint src/ --max-warnings=10
+        working-directory: frontend
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    needs: [kernel, server, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-dev protobuf-compiler
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Build kernel
+        run: cargo build --release
+        working-directory: kernel
+      - name: Test kernel CLI integration
+        run: cargo test --test integration --all-features
+        working-directory: kernel
+      - name: Start Go server
+        run: |
+          go build -o /tmp/onb-server ./cmd/server
+          /tmp/onb-server &
+          sleep 2
+        working-directory: server
+      - name: Health check
+        run: curl -f http://localhost:8080/api/health || (echo "Server not healthy" && exit 1)
+      - name: Cleanup
+        if: always()
+        run: kill %1 2>/dev/null || true
+
+  fuzz:
+    name: Fuzz (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          target: x86_64-unknown-linux-gnu
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build --fuzz-dir kernel/fuzz

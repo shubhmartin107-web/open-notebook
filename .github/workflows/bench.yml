@@ -1,0 +1,27 @@
+name: Benchmarks
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  bench:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-dev libduckdb-dev protobuf-compiler
+      - name: Build release
+        run: cargo build --release --manifest-path kernel/Cargo.toml
+      - name: Run benchmarks
+        run: cargo bench --manifest-path kernel/Cargo.toml
+      - name: Store benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: kernel/target/criterion/

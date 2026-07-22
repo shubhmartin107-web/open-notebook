@@ -1,0 +1,96 @@
+[package]
+name = "open-notebook-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "OpenNotebook reactive notebook kernel"
+
+[lib]
+name = "onb_kernel"
+crate-type = ["lib"]
+
+[[bin]]
+name = "onb-kernel"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# SQL parsing
+sqlparser = "0.51"
+
+# Protobuf
+prost = "0.13"
+prost-types = "0.13"
+
+# Hashing (content-addressed cache)
+blake3 = { version = "1", optional = true }
+
+# Embedded database for cache
+heed = { version = "0.20", optional = true }
+
+# DuckDB
+duckdb = { version = "1.2", features = ["bundled"], optional = true }
+
+# Python embedding
+pyo3 = { version = "0.23", features = ["auto-initialize"], optional = true }
+
+# Arrow (zero-copy data interchange)
+arrow = "54"
+parquet = "54"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# UUID generation
+uuid = { version = "1", features = ["v7", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Lazy static (for global cache)
+lazy_static = "1"
+
+# HTTP client (AI copilot)
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures = "0.3"
+tokio-stream = "0.1"
+
+# CSV parsing (file I/O)
+csv = "1"
+
+# Error formatting
+color-eyre = "0.6"
+thiserror = "2"
+
+[build-dependencies]
+prost-build = "0.13"
+
+[dev-dependencies]
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "dag"
+harness = false
+
+[[bench]]
+name = "format"
+harness = false
+
+[features]
+default = ["python", "sql", "cache"]
+python = ["pyo3"]
+sql = ["duckdb"]
+cache = ["blake3", "heed"]
+full = ["python", "sql", "cache"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"

@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package opennotebook.v1;
+
+option go_package = "github.com/open-notebook/open-notebook/proto/go/onb/v1;onbv1";
+option java_package = "ai.opennotebook.v1";
+option objc_class_prefix = "ONB";
+
+// ──────────────────────────────────────────
+// Top-level Notebook message
+// ──────────────────────────────────────────
+
+message Notebook {
+  string format_version = 1;           // "onb/v1"
+  NotebookMetadata metadata = 2;
+  repeated Cell cells = 3;
+  bytes crdt_snapshot = 4;             // Loro CRDT snapshot (binary, frontend-managed)
+  DAG dag = 5;
+}
+
+message NotebookMetadata {
+  string title = 1;
+  string description = 2;
+  string created_by = 3;               // UUID or user identifier
+  int64 created_at_unix_ms = 4;
+  int64 last_modified_at_unix_ms = 5;
+  string language = 6;                 // "python" default kernel language
+  map<string, string> custom = 7;      // Extensible metadata
+  string kernel_version = 8;           // Kernel version that last saved
+  repeated string tags = 9;
+}
+
+// ──────────────────────────────────────────
+// Cell definition
+// ──────────────────────────────────────────
+
+message Cell {
+  string id = 1;                       // UUID v7
+  CellKind kind = 2;
+  string source = 3;                   // Cell source code (UTF-8)
+  CellOutput output = 4;
+  int32 execution_count = 5;           // Monotonic execution counter
+  int64 last_executed_at_unix_ms = 6;
+  map<string, string> metadata = 7;    // Cell-level tags, custom data
+  ExecutionStatus status = 8;
+  string collapsed = 9;                // "collapsed" | "expanded" | "hidden"
+}
+
+enum CellKind {
+  CELL_KIND_UNSPECIFIED = 0;
+  CELL_KIND_PYTHON = 1;
+  CELL_KIND_SQL = 2;
+  CELL_KIND_R = 3;
+  CELL_KIND_MARKDOWN = 4;
+  CELL_KIND_RAW = 5;                   // Raw text (non-executable)
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_IDLE = 1;
+  EXECUTION_STATUS_RUNNING = 2;
+  EXECUTION_STATUS_SUCCESS = 3;
+  EXECUTION_STATUS_ERROR = 4;
+  EXECUTION_STATUS_QUEUED = 5;
+  EXECUTION_STATUS_CANCELLED = 6;
+}
+
+// ──────────────────────────────────────────
+// Cell output
+// ──────────────────────────────────────────
+
+message CellOutput {
+  repeated OutputItem items = 1;
+  string error_traceback = 2;          // Last error traceback (if status == ERROR)
+  int64 duration_ms = 3;               // Execution duration in milliseconds
+}
+
+message OutputItem {
+  string mime_type = 1;                // MIME type (e.g. "text/plain", "text/html", "image/png")
+  bytes data = 2;                      // Raw output data
+  string text = 3;                     // Text representation (for quick view)
+  int32 render_priority = 4;           // Lower number = preferred renderer (0 = best)
+  map<string, string> metadata = 5;    // Renderer hints (width, height, etc.)
+}
+
+// ──────────────────────────────────────────
+// DAG (Dataflow graph)
+// ──────────────────────────────────────────
+
+message DAG {
+  repeated DAGEdge edges = 1;          // Directed edges: upstream → downstream
+}
+
+message DAGEdge {
+  string from_cell_id = 1;             // Upstream cell (defines variables)
+  string to_cell_id = 2;               // Downstream cell (references variables)
+  repeated string variables = 3;       // Variables flowing through this edge
+}
+
+// ──────────────────────────────────────────
+// Kernel state (for snapshot / persistence)
+// ──────────────────────────────────────────
+
+message KernelSnapshot {
+  string kernel_version = 1;
+  int64 captured_at_unix_ms = 2;
+  map<string, bytes> content_addressed_cache = 3;  // cell_id → cached hash + output
+}
+
+// ──────────────────────────────────────────
+// File attachment (for large outputs)
+// ──────────────────────────────────────────
+
+message Attachment {
+  string id = 1;                       // UUID v7
+  string filename = 2;
+  string mime_type = 3;
+  int64 size_bytes = 4;
+  bytes content = 5;
+  string storage_hint = 6;            // "inline" | "file" | "s3"
+}

@@ -1,0 +1,25 @@
+[package]
+name = "open-notebook-kernel-fuzz"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+open-notebook-kernel = { path = ".." }
+prost = "0.13"
+anyhow = "1"
+
+[[bin]]
+name = "format"
+path = "fuzz_targets/format.rs"
+
+[[bin]]
+name = "dag"
+path = "fuzz_targets/dag.rs"
+
+[profile.release]
+debug = 1

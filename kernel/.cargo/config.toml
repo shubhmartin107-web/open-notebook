@@ -1,0 +1,2 @@
+[env]
+PROTOC = "/tmp/protoc/bin/protoc"

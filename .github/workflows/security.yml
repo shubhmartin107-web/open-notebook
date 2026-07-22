@@ -1,0 +1,127 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6am UTC
+  push:
+    branches: [main]
+    paths:
+      - 'kernel/Cargo.lock'
+      - 'kernel/Cargo.toml'
+      - 'server/go.mod'
+      - 'server/go.sum'
+      - 'frontend/package-lock.json'
+      - 'frontend/package.json'
+  pull_request:
+    paths:
+      - 'kernel/Cargo.lock'
+      - 'server/go.mod'
+      - 'frontend/package-lock.json'
+
+jobs:
+  cargo-audit:
+    name: Rust Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Run audit
+        run: cargo audit --manifest-path kernel/Cargo.toml
+        continue-on-error: true
+      - name: Summary
+        if: always()
+        run: echo "Rust dependency audit completed (continue-on-error enabled)"
+
+  npm-audit:
+    name: JS Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+      - name: Summary
+        if: always()
+        run: echo "npm audit completed (high severity threshold, continue-on-error enabled)"
+
+  trivy:
+    name: Trivy FS Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+      - name: Summary
+        if: always()
+        run: echo "Trivy filesystem scan completed (results uploaded as SARIF, continue-on-error enabled)"
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          path: '.'
+          format: 'cyclonedx'
+          output-file: 'sbom.cdx.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+  govulncheck:
+    name: Go Vuln Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+        working-directory: server
+        continue-on-error: true
+      - name: Summary
+        if: always()
+        run: echo "Go vulnerability check completed (continue-on-error enabled)"
+
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep
+        run: semgrep --config=auto --error --output=semgrep.sarif .
+        continue-on-error: true
+      - name: Upload Semgrep results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+      - name: Summary
+        if: always()
+        run: echo "Semgrep SAST scan completed (results uploaded as SARIF)"

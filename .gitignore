@@ -1,0 +1,27 @@
+# Rust
+kernel/target/
+kernel/fuzz/target/
+*.rs.bk
+
+# Go
+server/bin/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.log
+*.pid

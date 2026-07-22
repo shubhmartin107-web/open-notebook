@@ -1,0 +1,42 @@
+[app]
+name = "OpenNotebook"
+version = "0.1.0"
+description = "Reactive computational notebook with DAG execution, local AI copilot, and real-time collaboration"
+license = "Apache-2.0 AND AGPL-3.0"
+repository = "https://github.com/open-notebook/open-notebook"
+
+[capabilities]
+dag_execution = true
+sql_cells = true
+python_cells = true
+markdown_cells = true
+content_addressed_cache = true
+protobuf_format = true
+markdown_export = true
+http_api = true
+code_editor = true
+rich_output_rendering = true
+file_io_csv = false
+file_io_parquet = false
+ai_copilot = false
+crdt_collaboration = false
+r_cells = false
+mcp_server = false
+
+[integrations]
+ollama = { supported = false, planned = true }
+loro_crdt = { supported = false, planned = true }
+ark_r = { supported = false, planned = true }
+
+[formats]
+read = ["onb", "onb.md"]
+write = ["onb", "onb.md"]
+
+[interfaces]
+http = { port = 8080, protocols = ["REST", "JSON"] }
+kernel_ipc = { protocol = "stdio-json", transport = "subprocess" }
+
+[build]
+rust = { version = "1.85", manifest = "kernel/Cargo.toml" }
+go = { version = "1.24", manifest = "server/go.mod" }
+typescript = { version = "5.9", manifest = "frontend/package.json" }

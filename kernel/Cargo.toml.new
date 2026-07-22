@@ -1,0 +1,4 @@
+[[example]]
+name = "duckdb_test"
+path = "examples/duckdb_test.rs"
+required-features = ["sql"]

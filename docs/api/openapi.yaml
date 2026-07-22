@@ -1,0 +1,770 @@
+openapi: "3.1.0"
+info:
+  title: OpenNotebook API
+  version: "0.1.0"
+  description: REST + WebSocket API for the OpenNotebook orchestration server.
+servers:
+  - url: http://localhost:9876
+    description: Local development server
+  - url: https://api.open-notebook.ai/v1
+    description: Production server (future)
+
+paths:
+  # ──────────────────────────────────────────
+  # Notebook CRUD
+  # ──────────────────────────────────────────
+  /api/v1/notebooks:
+    get:
+      summary: List notebooks
+      operationId: listNotebooks
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: sort_by
+          in: query
+          schema: { type: string, enum: [name, created_at, last_modified_at], default: last_modified_at }
+      responses:
+        "200":
+          description: List of notebooks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotebookList"
+    post:
+      summary: Create a new notebook
+      operationId: createNotebook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotebookRequest"
+      responses:
+        "201":
+          description: Notebook created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotebookSummary"
+
+  /api/v1/notebooks/{notebookId}:
+    get:
+      summary: Get notebook by ID
+      operationId: getNotebook
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: format
+          in: query
+          schema: { type: string, enum: [protobuf, json, markdown], default: json }
+      responses:
+        "200":
+          description: Notebook data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notebook"
+            application/vnd.google.protobuf:
+              schema:
+                type: string
+                format: binary
+            text/markdown:
+              schema:
+                type: string
+    put:
+      summary: Update/save notebook
+      operationId: saveNotebook
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Notebook"
+      responses:
+        "200":
+          description: Notebook saved
+    delete:
+      summary: Delete a notebook
+      operationId: deleteNotebook
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Notebook deleted
+
+  # ──────────────────────────────────────────
+  # Cell operations
+  # ──────────────────────────────────────────
+  /api/v1/notebooks/{notebookId}/cells:
+    get:
+      summary: List all cells in a notebook
+      operationId: listCells
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: List of cells
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cell"
+    post:
+      summary: Add a new cell
+      operationId: createCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCellRequest"
+      responses:
+        "201":
+          description: Cell created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cell"
+
+  /api/v1/notebooks/{notebookId}/cells/{cellId}:
+    get:
+      summary: Get a single cell
+      operationId: getCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cellId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Cell data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cell"
+    put:
+      summary: Update cell source
+      operationId: updateCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cellId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCellRequest"
+      responses:
+        "200":
+          description: Cell updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cell"
+    delete:
+      summary: Delete a cell
+      operationId: deleteCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cellId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Cell deleted
+
+  /api/v1/notebooks/{notebookId}/cells/{cellId}/move:
+    post:
+      summary: Move a cell to a new position
+      operationId: moveCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cellId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_index:
+                  type: integer
+                  description: Target position (0-based)
+      responses:
+        "200":
+          description: Cell moved
+
+  # ──────────────────────────────────────────
+  # Execution
+  # ──────────────────────────────────────────
+  /api/v1/notebooks/{notebookId}/execute:
+    post:
+      summary: Execute notebook (all cells or selected)
+      operationId: executeNotebook
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cell_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Specific cells to run (omit for all)
+                run_upstream:
+                  type: boolean
+                  default: true
+                  description: Also run upstream dependencies?
+      responses:
+        "200":
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionStatus"
+
+  /api/v1/notebooks/{notebookId}/cells/{cellId}/execute:
+    post:
+      summary: Execute a single cell (and downstream)
+      operationId: executeCell
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cellId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Cell execution queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionStatus"
+
+  /api/v1/notebooks/{notebookId}/execute/stream:
+    get:
+      summary: Stream execution events (SSE)
+      operationId: streamExecution
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: SSE stream of execution events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE events: cell_start, cell_output, cell_error, cell_complete, execution_complete
+
+  # ──────────────────────────────────────────
+  # DAG
+  # ──────────────────────────────────────────
+  /api/v1/notebooks/{notebookId}/dag:
+    get:
+      summary: Get the DAG for a notebook
+      operationId: getDAG
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: DAG data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DAG"
+
+  # ──────────────────────────────────────────
+  # AI Copilot
+  # ──────────────────────────────────────────
+  /api/v1/ai/copilot/stream:
+    post:
+      summary: Stream AI copilot response (SSE)
+      operationId: copilotStream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CopilotRequest"
+      responses:
+        "200":
+          description: SSE stream of tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/v1/ai/status:
+    get:
+      summary: Check AI provider status
+      operationId: aiStatus
+      responses:
+        "200":
+          description: AI provider status (detected model, online/offline)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIStatus"
+
+  # ──────────────────────────────────────────
+  # Kernel & Health
+  # ──────────────────────────────────────────
+  /api/v1/health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 0.1.0
+                  kernel_running:
+                    type: boolean
+
+  /api/v1/kernels:
+    get:
+      summary: List running kernel sessions
+      operationId: listKernels
+      responses:
+        "200":
+          description: Kernel sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KernelInfo"
+
+  /api/v1/kernels/{notebookId}:
+    post:
+      summary: Start kernel for notebook
+      operationId: startKernel
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Kernel started
+    delete:
+      summary: Stop kernel
+      operationId: stopKernel
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Kernel stopped
+
+  # ──────────────────────────────────────────
+  # MCP (Model Context Protocol)
+  # ──────────────────────────────────────────
+  /api/v1/mcp/tools:
+    get:
+      summary: List available MCP tools
+      operationId: listMCPTools
+      responses:
+        "200":
+          description: MCP tool list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MCPTool"
+
+  /api/v1/mcp/execute:
+    post:
+      summary: Execute an MCP tool
+      operationId: executeMCPTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MCPRequest"
+      responses:
+        "200":
+          description: MCP tool result
+
+  # ──────────────────────────────────────────
+  # Collaboration WebSocket
+  # ──────────────────────────────────────────
+  /api/v1/notebooks/{notebookId}/ws:
+    get:
+      summary: WebSocket endpoint for CRDT collaboration
+      operationId: websocketCollab
+      parameters:
+        - name: notebookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "101":
+          description: WebSocket upgrade
+
+components:
+  schemas:
+    NotebookList:
+      type: object
+      properties:
+        notebooks:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotebookSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    NotebookSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        language:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_modified_at:
+          type: string
+          format: date-time
+        cell_count:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+
+    Notebook:
+      type: object
+      properties:
+        format_version:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/NotebookMetadata"
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/Cell"
+        dag:
+          $ref: "#/components/schemas/DAG"
+
+    NotebookMetadata:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_modified_at:
+          type: string
+          format: date-time
+        language:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    CreateNotebookRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        language:
+          type: string
+          default: python
+
+    Cell:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [python, sql, r, markdown, raw]
+        source:
+          type: string
+        output:
+          $ref: "#/components/schemas/CellOutput"
+        execution_count:
+          type: integer
+        status:
+          type: string
+          enum: [idle, running, success, error, queued, cancelled]
+        collapsed:
+          type: string
+          enum: [collapsed, expanded, hidden]
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    CreateCellRequest:
+      type: object
+      required:
+        - kind
+        - source
+      properties:
+        kind:
+          type: string
+          enum: [python, sql, r, markdown, raw]
+        source:
+          type: string
+        after_cell_id:
+          type: string
+          format: uuid
+          description: Insert after this cell (omit for append)
+
+    UpdateCellRequest:
+      type: object
+      properties:
+        source:
+          type: string
+        kind:
+          type: string
+          enum: [python, sql, r, markdown, raw]
+        collapsed:
+          type: string
+          enum: [collapsed, expanded, hidden]
+
+    CellOutput:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OutputItem"
+        error_traceback:
+          type: string
+        duration_ms:
+          type: integer
+
+    OutputItem:
+      type: object
+      properties:
+        mime_type:
+          type: string
+        data:
+          type: string
+          format: byte
+        text:
+          type: string
+        render_priority:
+          type: integer
+
+    DAG:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/DAGEdge"
+
+    DAGEdge:
+      type: object
+      properties:
+        from_cell_id:
+          type: string
+          format: uuid
+        to_cell_id:
+          type: string
+          format: uuid
+        variables:
+          type: array
+          items:
+            type: string
+
+    ExecutionStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [queued, running, completed, error]
+        cells:
+          type: array
+          items:
+            type: object
+            properties:
+              cell_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum: [queued, running, success, error]
+              duration_ms:
+                type: integer
+
+    CopilotRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+        context:
+          type: object
+          properties:
+            active_cell_source:
+              type: string
+            active_cell_kind:
+              type: string
+            notebook_cells:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  kind:
+                    type: string
+                  source:
+                    type: string
+                  output:
+                    type: string
+            variable_scope:
+              type: object
+              additionalProperties:
+                type: string
+            error_traceback:
+              type: string
+        stream:
+          type: boolean
+          default: true
+
+    AIStatus:
+      type: object
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        online:
+          type: boolean
+        endpoint:
+          type: string
+
+    KernelInfo:
+      type: object
+      properties:
+        notebook_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        memory_usage_mb:
+          type: integer
+        uptime_seconds:
+          type: integer
+
+    MCPTool:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        input_schema:
+          type: object
+
+    MCPRequest:
+      type: object
+      required:
+        - tool
+        - arguments
+      properties:
+        tool:
+          type: string
+        notebook_id:
+          type: string
+          format: uuid
+        arguments:
+          type: object

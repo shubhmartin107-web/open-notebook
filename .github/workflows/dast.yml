@@ -1,0 +1,33 @@
+name: DAST (ZAP)
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly on Monday
+  workflow_dispatch:
+
+jobs:
+  zap:
+    name: OWASP ZAP Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-dev libduckdb-dev protobuf-compiler
+      - name: Build kernel
+        run: cargo build --release --manifest-path kernel/Cargo.toml
+      - name: Start server
+        run: |
+          go build -o /tmp/onb-server ./cmd/server
+          /tmp/onb-server &
+          sleep 3
+        working-directory: server
+      - name: ZAP Scan
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+      - name: Cleanup
+        if: always()
+        run: kill %1 2>/dev/null || true
