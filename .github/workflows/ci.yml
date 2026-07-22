@@ -49,7 +49,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install protoc python3
-          echo "CXXFLAGS=/std:c++17" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          echo "CXXFLAGS=/std:c++17 /EHsc" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
       - name: Check
         run: cargo check --manifest-path kernel/Cargo.toml --all-features
       - name: Test
