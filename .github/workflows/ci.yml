@@ -81,7 +81,7 @@ jobs:
         run: go vet ./...
         working-directory: server
       - name: Go fmt check
-        run: go fmt ./... 2>&1 | (read line && echo "unformatted: $line" && exit 1 || exit 0)
+        run: "go fmt ./... 2>&1 | (read line && echo \"unformatted: $line\" && exit 1 || exit 0)"
         working-directory: server
         shell: bash
       - name: Build
