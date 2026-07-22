@@ -1,2 +1,3 @@
 [env]
-PROTOC = "/tmp/protoc/bin/protoc"
+# PROTOC not set — relies on PATH discovery. Set to /tmp/protoc/bin/protoc if using local install.
+# PROTOC = "/tmp/protoc/bin/protoc"
