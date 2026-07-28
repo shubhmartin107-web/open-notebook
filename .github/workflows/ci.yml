@@ -50,9 +50,9 @@ jobs:
         run: |
           choco install protoc python3
           $fi = '/FI"' + $env:GITHUB_WORKSPACE + '\kernel\compat\msvc_stdext.h"'
-          echo "CL=/std:c++17 /EHsc $fi" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          echo "CXXFLAGS_x86_64-pc-windows-msvc=/std:c++17 /EHsc" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          echo "CXXFLAGS_aarch64-pc-windows-msvc=/std:c++17 /EHsc" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          echo "CXXFLAGS_x86_64-pc-windows-msvc=/std:c++17 /EHsc $fi" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          echo "CXXFLAGS_aarch64-pc-windows-msvc=/std:c++17 /EHsc $fi" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          echo "CXXFLAGS=/std:c++17 /EHsc $fi" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
       - name: Check
         run: cargo check --manifest-path kernel/Cargo.toml --all-features
       - name: Test
