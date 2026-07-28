@@ -1,2 +1,6 @@
-# ZAP rules file
-100000	IGNORE	(Example rule - adjust as needed)
+100000	IGNORE	(Not a browser - server to server)
+100001	IGNORE	(Not a browser - server to server)
+100007	IGNORE	(Not a browser - server to server)
+10054	IGNORE	(Not a browser - server to server)
+10096	IGNORE	(Not a browser - server to server)
+10105	IGNORE	(Not a browser - server to server)
